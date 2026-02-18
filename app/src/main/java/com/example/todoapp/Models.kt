@@ -57,7 +57,7 @@ object TagsRepository {
         Tag(name = "Обучение", group = TagGroup.SPHERE, color = Color.parseColor("#9C27B0")) // Фиолетовый
     )
 
-    val tags: List<Tag> get() = _tags
+    val tags: List<Tag> get() = _tags.toList()
 
     // Добавление нового пользовательского тега
     fun addCustomTag(name: String, color: Int): Tag {

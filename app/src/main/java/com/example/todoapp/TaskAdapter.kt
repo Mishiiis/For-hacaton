@@ -6,7 +6,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.CheckBox
 import android.widget.TextView
-import androidx.cardview.widget.CardView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -34,7 +33,6 @@ class TasksAdapter(
         private val onTaskCompleteToggle: (Task) -> Unit
     ) : RecyclerView.ViewHolder(itemView) {
 
-        private val cardView: CardView = itemView.findViewById(R.id.cardView)
         private val checkBoxCompleted: CheckBox = itemView.findViewById(R.id.checkBoxCompleted)
         private val textViewTaskTitle: TextView = itemView.findViewById(R.id.textViewTaskTitle)
         private val chipGroupTags: ChipGroup = itemView.findViewById(R.id.chipGroupTags)
@@ -47,8 +45,8 @@ class TasksAdapter(
             textViewTaskTitle.text = task.title
             textViewTaskTitle.paint.isStrikeThruText = task.isCompleted
 
-            // Изменение фона в зависимости от статуса выполнения
-            cardView.setCardBackgroundColor(
+            // Изменение фона
+            itemView.setBackgroundColor(
                 if (task.isCompleted) Color.LTGRAY else Color.WHITE
             )
 
@@ -64,18 +62,14 @@ class TasksAdapter(
                 chipGroupTags.addView(chip)
             }
 
-            // Устанавливаем слушатели
             setupListeners(task)
         }
 
         private fun setupListeners(task: Task) {
-            // Для чекбокса нужно временно удалить слушатель, чтобы избежать рекурсии
             checkBoxCompleted.setOnCheckedChangeListener(null)
             checkBoxCompleted.isChecked = task.isCompleted
-            checkBoxCompleted.setOnCheckedChangeListener { _, isChecked ->
-                if (isChecked != task.isCompleted) {
-                    onTaskCompleteToggle(task)
-                }
+            checkBoxCompleted.setOnCheckedChangeListener { _, _ ->
+                onTaskCompleteToggle(task)
             }
 
             itemView.setOnClickListener {
@@ -94,21 +88,17 @@ class TasksAdapter(
             if (oldItem.title != newItem.title) return false
             if (oldItem.isCompleted != newItem.isCompleted) return false
 
-            // Правильное сравнение списков тегов
+            // Безопасное сравнение списков тегов
             return areTagListsEqual(oldItem.tags, newItem.tags)
         }
 
-        private fun areTagListsEqual(oldTags: List<Tag>, newTags: List<Tag>): Boolean {
-            // Если ссылки на один и тот же объект
-            if (oldTags === newTags) return true
+        private fun areTagListsEqual(tags1: List<Tag>, tags2: List<Tag>): Boolean {
+            if (tags1.size != tags2.size) return false
 
-            // Если размер разный
-            if (oldTags.size != newTags.size) return false
+            val ids1 = tags1.map { it.id }.sorted()
+            val ids2 = tags2.map { it.id }.sorted()
 
-            // Сравниваем каждый тег по ID (наиболее надежно)
-            val oldTagIds = oldTags.map { it.id }.toSet()
-            val newTagIds = newTags.map { it.id }.toSet()
-            return oldTagIds == newTagIds
+            return ids1 == ids2
         }
     }
 }

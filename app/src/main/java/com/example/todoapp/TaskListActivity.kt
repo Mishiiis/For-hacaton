@@ -1,26 +1,28 @@
 package com.example.todoapp
 
 import android.content.Intent
-import android.graphics.Color
 import android.os.Bundle
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.example.todoapp.databinding.ActivityTaskListBinding
+import com.google.android.material.floatingactionbutton.FloatingActionButton  // Добавьте этот импорт
+import com.google.android.material.snackbar.Snackbar
 
 class TaskListActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityTaskListBinding
+    private lateinit var recyclerView: RecyclerView
+    private lateinit var fabAddTask: FloatingActionButton
     private lateinit var adapter: TasksAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_task_list)
 
-        // Инициализация binding
-        binding = ActivityTaskListBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        recyclerView = findViewById(R.id.recyclerViewTasks)
+        fabAddTask = findViewById(R.id.fabAddTask)
 
         setupRecyclerView()
         setupListeners()
@@ -31,10 +33,10 @@ class TaskListActivity : AppCompatActivity() {
             onTaskClick = { task -> editTask(task) },
             onTaskCompleteToggle = { task -> toggleTaskCompletion(task) }
         )
-        binding.recyclerViewTasks.adapter = adapter
-        binding.recyclerViewTasks.layoutManager = LinearLayoutManager(this)
+        recyclerView.adapter = adapter
+        recyclerView.layoutManager = LinearLayoutManager(this)
 
-        // Swipe to delete
+        // Swipe to delete с подтверждением
         val itemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
             0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
         ) {
@@ -47,14 +49,41 @@ class TaskListActivity : AppCompatActivity() {
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
                 val position = viewHolder.adapterPosition
                 val task = adapter.currentList[position]
-                deleteTask(task)
+
+                // Показываем диалог подтверждения
+                showDeleteConfirmation(task, position)
             }
         })
-        itemTouchHelper.attachToRecyclerView(binding.recyclerViewTasks)
+        itemTouchHelper.attachToRecyclerView(recyclerView)
+    }
+
+    private fun showDeleteConfirmation(task: Task, position: Int) {
+        AlertDialog.Builder(this)
+            .setTitle("Удаление задачи")
+            .setMessage("Удалить задачу \"${task.title}\"?")
+            .setPositiveButton("Удалить") { _, _ ->
+                // Удаляем из репозитория
+                TasksRepository.deleteTask(task.id)
+
+                // Получаем обновленный список и передаем в адаптер
+                val updatedList = TasksRepository.tasks
+                adapter.submitList(updatedList)
+
+                Toast.makeText(this, "Задача удалена", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Отмена") { _, _ ->
+                // Восстанавливаем элемент в адаптере
+                adapter.notifyItemChanged(position)
+            }
+            .setOnCancelListener {
+                // Если диалог закрыли кнопкой "назад" - восстанавливаем
+                adapter.notifyItemChanged(position)
+            }
+            .show()
     }
 
     private fun setupListeners() {
-        binding.fabAddTask.setOnClickListener {
+        fabAddTask.setOnClickListener {
             openTaskDialog()
         }
     }
@@ -72,18 +101,6 @@ class TaskListActivity : AppCompatActivity() {
         val intent = Intent(this, TaskEditActivity::class.java)
         intent.putExtra("task_id", taskToEdit?.id)
         startActivity(intent)
-    }
-
-    private fun deleteTask(task: Task) {
-        AlertDialog.Builder(this)
-            .setTitle("Удаление задачи")
-            .setMessage("Удалить задачу \"${task.title}\"?")
-            .setPositiveButton("Удалить") { _, _ ->
-                TasksRepository.deleteTask(task.id)
-                loadTasks()
-            }
-            .setNegativeButton("Отмена", null)
-            .show()
     }
 
     private fun toggleTaskCompletion(task: Task) {

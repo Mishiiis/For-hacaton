@@ -3,61 +3,97 @@ package com.example.todoapp
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
+import android.util.Log
 import android.util.TypedValue
 import android.view.ViewGroup
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import com.example.todoapp.databinding.ActivityTaskEditBinding
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 
 class TaskEditActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityTaskEditBinding
+    private lateinit var editTextTaskTitle: EditText
+    private lateinit var buttonSaveTask: Button
+    private lateinit var linearLayoutTagsContainer: LinearLayout
+
     private var taskId: String? = null
     private var existingTask: Task? = null
     private val selectedTags = mutableSetOf<Tag>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d("TaskEdit", "onCreate started")
 
-        // Инициализация binding
-        binding = ActivityTaskEditBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        try {
+            setContentView(R.layout.activity_task_edit)
+            Log.d("TaskEdit", "ContentView set")
 
-        taskId = intent.getStringExtra("task_id")
-        existingTask = TasksRepository.tasks.find { it.id == taskId }
+            // Инициализация view
+            editTextTaskTitle = findViewById(R.id.editTextTaskTitle)
+            buttonSaveTask = findViewById(R.id.buttonSaveTask)
+            linearLayoutTagsContainer = findViewById(R.id.linearLayoutTagsContainer)
 
-        setupViews()
-        setupTagGroups()
-    }
+            Log.d("TaskEdit", "Views initialized")
 
-    private fun setupViews() {
-        existingTask?.let {
-            binding.editTextTaskTitle.setText(it.title)
-            selectedTags.addAll(it.tags)
-        }
+            // Получаем ID задачи из Intent
+            taskId = intent.getStringExtra("task_id")
+            Log.d("TaskEdit", "taskId: $taskId")
 
-        binding.buttonSaveTask.setOnClickListener {
-            saveTask()
-        }
+            existingTask = taskId?.let { id ->
+                TasksRepository.tasks.find { it.id == id }
+            }
+            Log.d("TaskEdit", "existingTask: $existingTask")
 
-        binding.buttonAddCustomTag.setOnClickListener {
-            showAddCustomTagDialog()
+            // Загружаем существующие теги если редактируем
+            existingTask?.let {
+                editTextTaskTitle.setText(it.title)
+                selectedTags.addAll(it.tags)
+                Log.d("TaskEdit", "Loaded existing task with ${it.tags.size} tags")
+            }
+
+            // Создаем теги
+            setupTagGroups()
+
+            // Устанавливаем слушатель на кнопку сохранения
+            buttonSaveTask.setOnClickListener {
+                Log.d("TaskEdit", "Save button clicked")
+                saveTask()
+            }
+
+            Log.d("TaskEdit", "onCreate completed successfully")
+
+        } catch (e: Exception) {
+            Log.e("TaskEdit", "Error in onCreate", e)
+            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun setupTagGroups() {
-        // Очищаем контейнер перед добавлением
-        binding.linearLayoutTagsContainer.removeAllViews()
+        Log.d("TaskEdit", "setupTagGroups started")
 
-        // Группируем теги
-        val tagsByGroup = TagsRepository.tags.groupBy { it.group }
+        linearLayoutTagsContainer.removeAllViews()
 
-        // Создаем чипсы для каждой группы
+        val allTags = TagsRepository.tags
+        Log.d("TaskEdit", "Total tags from repository: ${allTags.size}")
+
+        if (allTags.isEmpty()) {
+            Log.e("TaskEdit", "No tags found in repository!")
+            Toast.makeText(this, "Ошибка: теги не загружены", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val tagsByGroup = allTags.groupBy { it.group }
+        Log.d("TaskEdit", "Groups found: ${tagsByGroup.keys}")
+
         tagsByGroup.forEach { (group, tags) ->
+            Log.d("TaskEdit", "Processing group: ${group.displayName} with ${tags.size} tags")
+
             // Заголовок группы
             val groupTitle = TextView(this).apply {
                 text = group.displayName
@@ -68,12 +104,11 @@ class TaskEditActivity : AppCompatActivity() {
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 )
             }
-            binding.linearLayoutTagsContainer.addView(groupTitle)
+            linearLayoutTagsContainer.addView(groupTitle)
 
             // Группа чипсов
             val chipGroup = ChipGroup(this).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 )
             }
@@ -89,72 +124,75 @@ class TaskEditActivity : AppCompatActivity() {
                     setOnCheckedChangeListener { _, isChecked ->
                         if (isChecked) {
                             selectedTags.add(tag)
+                            Log.d("TaskEdit", "Tag selected: ${tag.name}")
+                            Toast.makeText(this@TaskEditActivity, "Выбран: ${tag.name}", Toast.LENGTH_SHORT).show()
                         } else {
                             selectedTags.remove(tag)
+                            Log.d("TaskEdit", "Tag deselected: ${tag.name}")
                         }
                     }
                 }
                 chipGroup.addView(chip)
             }
 
-            binding.linearLayoutTagsContainer.addView(chipGroup)
-        }
-    }
-
-    private fun showAddCustomTagDialog() {
-        val builder = AlertDialog.Builder(this)
-        val input = android.widget.EditText(this).apply {
-            hint = "Название тега"
+            linearLayoutTagsContainer.addView(chipGroup)
         }
 
-        builder.setTitle("Новый тег")
-            .setView(input)
-            .setPositiveButton("Добавить") { _, _ ->
-                val tagName = input.text.toString()
-                if (tagName.isNotBlank()) {
-                    // Случайный цвет для нового тега
-                    val randomColor = Color.rgb(
-                        (0..255).random(),
-                        (0..255).random(),
-                        (0..255).random()
-                    )
-                    val newTag = TagsRepository.addCustomTag(tagName, randomColor)
-
-                    // Обновляем UI с новым тегом
-                    selectedTags.add(newTag)
-                    recreate() // Простой способ обновить все теги
-                }
-            }
-            .setNegativeButton("Отмена", null)
-            .show()
+        Log.d("TaskEdit", "setupTagGroups completed, selected tags count: ${selectedTags.size}")
     }
 
     private fun saveTask() {
-        val title = binding.editTextTaskTitle.text.toString()
-        if (title.isBlank()) {
-            Toast.makeText(this, "Введите название задачи", Toast.LENGTH_SHORT).show()
-            return
+        Log.d("TaskEdit", "saveTask started")
+
+        try {
+            val title = editTextTaskTitle.text.toString().trim()
+            Log.d("TaskEdit", "Title: '$title'")
+
+            if (title.isEmpty()) {
+                Toast.makeText(this, "Введите название задачи", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            Log.d("TaskEdit", "Selected tags count: ${selectedTags.size}")
+            if (selectedTags.isEmpty()) {
+                Toast.makeText(this, "Выберите хотя бы один тег", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            // Создаем новую задачу
+            val task = if (existingTask != null) {
+                Log.d("TaskEdit", "Updating existing task")
+                existingTask!!.copy(
+                    title = title,
+                    tags = selectedTags.toList()
+                )
+            } else {
+                Log.d("TaskEdit", "Creating new task")
+                Task(
+                    title = title,
+                    tags = selectedTags.toList()
+                )
+            }
+
+            Log.d("TaskEdit", "Task created: $task")
+
+            // Сохраняем в репозиторий
+            if (existingTask != null) {
+                TasksRepository.updateTask(task)
+                Log.d("TaskEdit", "Task updated in repository")
+            } else {
+                TasksRepository.addTask(task)
+                Log.d("TaskEdit", "Task added to repository")
+            }
+
+            Toast.makeText(this, "Задача сохранена!", Toast.LENGTH_SHORT).show()
+            Log.d("TaskEdit", "Finishing activity")
+            finish()
+
+        } catch (e: Exception) {
+            Log.e("TaskEdit", "Error in saveTask", e)
+            Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
         }
-
-        if (selectedTags.isEmpty()) {
-            Toast.makeText(this, "Выберите хотя бы один тег", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val task = existingTask?.copy(
-            title = title,
-            tags = selectedTags.toList()
-        ) ?: Task(
-            title = title,
-            tags = selectedTags.toList()
-        )
-
-        if (existingTask != null) {
-            TasksRepository.updateTask(task)
-        } else {
-            TasksRepository.addTask(task)
-        }
-
-        finish()
     }
 }
+
